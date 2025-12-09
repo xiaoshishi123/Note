@@ -1,0 +1,25 @@
+# 忽略所有图片文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.webp
+
+# 忽略视频文件
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# 忽略所有大文件夹（如果有）
+save_video/
+resources/
+assets/
+images/
+
+# 忽略缓存文件
+*.log
+.DS_Store
+Thumbs.db

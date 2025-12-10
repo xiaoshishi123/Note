@@ -96,6 +96,12 @@ ldapsearch -LLL -o ldif-wrap=no -H ldap://192.168.200.14:389 -x -D "14088@wisdri
 
 
 
+前端反正添加了一堆页面 你看着迁移吧  数不清了 
+
+
+
+**注意还多了个心跳js  以及路由router 那俩文件挺容易忘记的**
+
 
 
 

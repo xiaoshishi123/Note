@@ -74,6 +74,8 @@ ldapsearch -LLL -o ldif-wrap=no -H ldap://192.168.200.14:389 -x -D "14088@wisdri
 
 记得把BIM中心的实习生给删了
 
+通过调用接口已经删除了
+
 #### 3，user_video_progress    user_video_session
 
 用户行为表  只需要结构 

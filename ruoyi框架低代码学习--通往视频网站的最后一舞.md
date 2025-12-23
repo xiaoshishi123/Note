@@ -5234,3 +5234,377 @@ onMounted(async () => {
 
 ```
 
+
+
+
+
+
+
+
+
+#### 前端两个页面留档
+
+router:  index.ts
+
+```ts
+import { createRouter, createWebHistory } from 'vue-router';
+import Login from '../views/Login.vue';
+import register from '../views/register.vue';
+import HomeView from '../views/user/HomeView.vue'; // 假设有一个 Home 页面
+import adminlogin from '@/views/adminlogin.vue';
+import AdminManagement from '@/views/Admin/Home.vue';
+import VideoHome from '@/views/Admin/AdminManagement/VideoHome.vue';
+import CategoryHome from '@/views/Admin/AdminManagement/CategoryHome.vue';
+import UserHome from '@/views/Admin/AdminManagement/UserHome.vue';
+import AdminHome from '@/views/Admin/AdminManagement/adminHome.vue';
+import VideoListView from '@/views/user/DisplayCategoryView.vue';
+import LearnStatistics from "@/views/Admin/AdminManagement/LearnStatistics.vue";
+import LearnProgressCategory from '@/views/Admin/AdminManagement/LearnProgressCategory.vue';
+import LearnProgressDpt from '@/views/Admin/AdminManagement/LearnProgressDpt.vue';
+import Mylearn from '@/views/user/Mylearn.vue';
+
+const routes = [
+  {
+    path: '/',
+    name: 'Home',
+    component: HomeView
+  },
+  {
+    path: '/category/:categoryId',
+    name: 'category-videos',
+    component: VideoListView,
+    props: true
+  },
+  {
+    path: '/user/my-learn',
+    name: 'Mylearn',
+    component: Mylearn
+  },
+  {
+    path: '/fy3adminfy5',
+    name: 'Admin',
+    component: AdminManagement,
+    redirect: '/fy3adminfy5/video-management', // 设置默认子路由
+    children: [
+      {
+        path: 'video-management',
+        name: 'VideoManagement',
+        component: VideoHome,
+      },
+      {
+        path: 'Category-management',
+        name: 'CategoryHome',
+        component: CategoryHome,
+      },
+      {
+        path: 'user-management',  // 新增用户管理路由
+        name: 'UserManagement',
+        component: UserHome,
+      },
+      {
+        path: 'Admin-management',  // 新增用户管理路由
+        name: 'AdminManagement',
+        component: AdminHome,
+      },
+
+      {
+        path: 'Learn-statistics',
+        name: 'LearnStatistics',
+        component: LearnStatistics,
+
+      },
+
+      {
+        path: 'Learn-ProgressCategory',
+        name: 'LearnProgressCategory',
+        component: LearnProgressCategory,
+      },
+
+      {
+        path: 'Learn-ProgressDpt',
+        name: 'LearnProgressDpt',
+        component: LearnProgressDpt,
+      }
+      // 添加更多子路由
+    ],
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login
+  },
+  {
+    path: '/login/addNew',
+    name: 'Register',
+    component: register
+  },
+  {
+    path: '/login/adminlogin',
+    name: 'AdminLogin',
+    component: adminlogin
+  }
+];
+
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+});
+
+// 全局路由守卫
+router.beforeEach((to, from, next) => {
+  // 检查用户是否已登录
+  const token = localStorage.getItem('token'); // 假设登录后会将 token 存储在 localStorage 中
+
+  if (token) {
+    try {
+      // 解析 token (仅作为示例，不能完全依赖客户端解析)
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+
+      // 检查 token 是否已过期
+      if (payload.exp && payload.exp < currentTime) {
+        console.warn("Token 已过期");
+        localStorage.removeItem('token');
+        next({ name: 'Login' });
+      } else {
+        next();
+      }
+    } catch (error) {
+      console.error("无效的 token:", error);
+      localStorage.removeItem('token');
+      next({ name: 'Login' });
+    }
+  } else if (to.name !== 'Login' && to.name !== 'Register' && to.name !== 'AdminLogin') {
+    // 如果未登录且试图访问非登录页面，则重定向到登录页面
+    next({ name: 'Login' });
+  } else {
+    next();
+  }
+});
+export default router;
+
+```
+
+
+
+
+
+login.vue
+
+```vue
+<template>
+  <div class="login-container">
+    <el-card class="login-card">
+      <el-form @submit.prevent="handleLogin" label-position="left">
+        <!-- 顶部品牌图 -->
+        <div class="form-header">
+          <img
+            class="brand-img"
+            src="@/assets/logoword.png"
+            alt="中冶南方BIM讲堂"
+          />
+        </div>
+
+        <el-form-item label="工号">
+          <el-input v-model="username" placeholder="请输入工号" required class="custom-input" />
+        </el-form-item>
+
+        <el-form-item label="密码">
+          <el-input v-model="password" type="password" placeholder="请输入域密码" required class="custom-input" />
+        </el-form-item>
+
+        <el-form-item>
+          <!-- 登录按钮 -->
+          <el-button type="primary" native-type="submit" class="login-button">登录</el-button>
+        </el-form-item>
+
+        <!-- 管理员入口：文字按钮 -->
+        <div class="admin-entry">
+          <a href="javascript:void(0)" @click="AdminLogin">管理员入口</a>
+        </div>
+      </el-form>
+    </el-card>
+
+    <footer class="page-footer">
+      <img :src="require('@/assets/wisdrilogo.png')" alt="logo" class="footer-logo" />
+      <span class="footer-text">中冶南方钢铁公司工程数字化(BIM)中心</span>
+    </footer>
+
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import Request from '@/utils/request'
+
+const router = useRouter()
+
+const username = ref('')
+const password = ref('')
+const errorMessage = ref('')
+
+const handleLogin = async () => {
+  try {
+    const response = await Request.post('/login', {
+      username: username.value,
+      password: password.value,
+    })
+
+    if (response && response.code === 200 && response.data && response.data.token) {
+      const token = response.data.token
+      sessionStorage.setItem('token', token)
+      sessionStorage.setItem('username', username.value)
+      router.push('/')
+    } else {
+      errorMessage.value = response?.data?.msg || '未知错误'
+    }
+  } catch (error) {
+    errorMessage.value = '登录失败，请检查用户名和密码'
+  }
+}
+
+const AdminLogin = () => {
+  router.push('/login/adminlogin').catch(err => {
+    console.error('路由跳转失败:', err)
+  })
+}
+</script>
+
+
+<style>
+:root{
+  --hdr-bg:      #f5f7fa;   /* 头部背景色（浅灰白） */
+  --hdr-border:  #e5e7eb;   /* 头部底部分隔线 */
+  --text-weak:   #666c72;   /* 灰色文字（欢迎您、副标题说明等） */
+  --text-black:  #000000ce; /* 主体深色文字（中间标题、主文字） */
+  --link-green:  #3eaf6d;   /* 链接/按钮主色（首页、退出登录） */
+  --link-hover:  #1f9d55;   /* 链接悬停色 */
+  --link-active: #18794a;   /* 链接点击色 */
+}
+</style>
+
+<style scoped>
+:global(html, body){
+  height:100%;
+  margin:0;
+  /* 不需要滚动条 */
+}
+
+.login-container {
+  position: relative;
+  height: 100vh;                  /* 视口高 */
+  /* 背景图填满：不加 fixed，避免模糊；保持原图色彩 */
+  background: url(~@/assets/pic/backpic2.png) center/cover no-repeat;
+  /* 居中卡片 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 为底部固定页脚“预留”空间，避免遮挡卡片 */
+  padding-bottom: 56px;           /* = 页脚高度 */
+  box-sizing: border-box;
+}
+
+/* 登录卡片：保持你原来的视觉，略微优化半径/阴影也可以保留 */
+.login-card {
+  width: 420px;
+  padding: 36px;
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+}
+
+.form-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.brand-img {
+  max-width: 260px;
+  width: 70%;
+  height: auto;
+}
+
+/* 表单项 */
+.el-form-item {
+  margin-bottom: 20px;
+}
+
+/* 登录按钮：绿色渐变、整行、圆角大（保持你之前风格） */
+.login-button {
+  width: 100%;
+  height: 46px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(180deg, #2bbb74, #22a964);
+}
+.login-button:hover { opacity: 0.95; }
+.login-button:active { transform: translateY(1px); }
+
+/* 管理员入口：文字按钮样式（保持） */
+.admin-entry {
+  margin-top: 12px;
+  text-align: center;
+}
+.admin-entry a {
+  color: #1a8f59;
+  font-size: 14px;
+  text-decoration: none;
+}
+.admin-entry a:hover { text-decoration: underline; }
+
+/* === 页脚真正居中 ===
+   关键点：
+   1) 固定在底部
+   2) 宽度用内容宽度（max-content），用 left:50% + translateX(-50%) 精准水平居中
+   3) 去掉左右 margin 偏移，改用 gap 控制间距
+*/
+.page-footer {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;   /* 整体居中 */
+  gap: 0.8rem;                 /* 控制 logo 和文字之间的间距 */
+  width: max-content;        /* 宽度随内容 */
+  padding: 0 20px;           /* 两边留点缓冲 */
+  z-index: 1000;
+}
+
+.footer-logo {
+  width: 120px;
+  height: auto;
+  object-fit: contain;
+  margin-right: clamp(16px, 4vw, 48px);         /*  */
+}
+
+.footer-text {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: #000000ce;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  font-family: "PingFang SC","Microsoft YaHei","Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  margin-left: clamp(16px, 4vw, 48px);   /* 中间偏右的距离 */
+}
+
+
+/* 响应式 */
+@media screen and (max-width: 768px) {
+  .login-card {
+    width: 90%;
+    padding: 20px;
+  }
+  .brand-img { max-width: 200px; }
+}
+</style>
+
+```
+

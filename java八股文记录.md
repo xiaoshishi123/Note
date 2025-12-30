@@ -411,13 +411,83 @@ System.out.println(s1 == s2);// ④ false
 
 
 
-## 2，集合类
 
 
 
-## 3，java并发
+
+## 2，java并发
+
+#### 1，threadlocal
+
+简单来说就是每个线程都可以创建一个同名的
+
+```java
+ThreadLocal<Integer> a = new ThreadLocal<>();
+```
+
+但是每一个线程内的这个变量不一样 
 
 
+
+
+
+底层：通过**每个线程都有一个单独的ThreadLocalMap**
+
+里面是哈希表的形式   `key是threadlocal的引用  value就是对应的值`
+
+```java
+Thread A
+ └── ThreadLocalMap A
+       ├── key: tl1 → value: 10
+       └── key: tl2 → value: "A"
+
+Thread B
+ └── ThreadLocalMap B
+       ├── key: tl1 → value: 20
+       └── key: tl2 → value: "B"
+
+```
+
+
+
+应用场景：解释理解
+
+
+
+在 Spring Boot 这种同步 Web 模型里，可以等价成一句更狠的：
+
+> **一次 HTTP 请求 ≈ 一个线程的生命周期**
+
+##### 举例：两个人同时访问页面的分页参数
+
+两个人访问同一个接口：
+
+```
+GET /videos?page=1&pageSize=10   （用户 A）
+GET /videos?page=3&pageSize=20   （用户 B）
+```
+
+实际运行时是这样：
+
+```
+线程 T1（用户 A）：
+  ThreadLocal.page = (1, 10)
+
+线程 T2（用户 B）：
+  ThreadLocal.page = (3, 20)
+```
+
+- 两个请求**走的是同一段 Java 代码**
+- 调的是**同一个 mapper 方法**
+- 但因为线程不同
+   👉 ThreadLocalMap 不同
+   👉 分页参数天然隔离
+
+
+
+
+
+## 3，集合类
 
 
 

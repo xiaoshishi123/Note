@@ -598,6 +598,219 @@ synchronized(Xxx.class)就是类对象 所以阻塞  跟上面一样理解
 
 
 
+#### 5，volatile只满足有序性和可见性
+
+不满足原子性
+
+```java
+
+public class TestValitile {
+    AtomicInteger number1 = new AtomicInteger(0);
+    int number = 0;
+
+    public void increase1() {
+        number1.incrementAndGet();
+    }
+
+    public void increase() {
+        number++;
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        TestValitile demo = new TestValitile();
+
+        Thread[] threads = new Thread[10];
+
+        for (int j = 0; j < 10; j++) {
+            threads[j] = new Thread(() -> {
+                for (int i = 0; i < 1000; i++) {
+                    demo.increase();
+                }
+            });
+            threads[j].start();
+        }
+
+        // 等待所有线程执行完
+        for (Thread t : threads) {
+            t.join();
+        }
+
+        System.out.println(
+                Thread.currentThread().getName() +
+                        " final number result = " + demo.number
+        );
+    }
+}
+
+```
+
+结果并非10000  
+
+
+
+#### 6，AQS
+
+AQS（AbstractQueuedSynchronizer）是 JDK 并发包中用于构建锁和同步器的基础框架，
+
+它的核心思想是`用一个整型的 state 状态来表示资源占用情况，并配合一个 FIFO 的等待队列来管理线程的获取与释放`。
+
+
+
+线程在获取资源时，会通过 CAS 操作尝试修改 state，成功则直接执行；失败则被封装成节点加入等待队列，并在合适时机被阻塞和唤醒。
+
+
+
+AQS 本身并不关心具体的同步语义，只负责线程排队和调度，具体的加锁和释放规则由子类通过重写 acquire 和 release 相关方法来定义。
+
+
+
+JDK 中的 **ReentrantLock、Semaphore、CountDownLatch、ReentrantReadWriteLock 等并发工具**，底层都是基于 AQS 实现的，它们通过不同的 state 语义和获取策略，复用了同一套线程排队和同步机制。
+
+------
+
+如果你想再**保险一点**，可以在最后补一句收口用的：
+
+> 相比 synchronized 的 JVM 内建 monitor，AQS 是 Java 层的可扩展同步框架，更适合实现公平锁、可中断锁和多条件队列等复杂并发控制。
+
+
+
+
+
+
+
+
+
+AQS有两种队列，**条件队列和同步队列**
+
+```
+同步队列：没抢到锁，在这排队
+条件队列：抢到锁但条件不对，在这等
+```
+
+如果面试官问你这个问题，你可以说：
+
+> AQS 中的同步队列用于管理线程对锁的获取与释放，线程获取锁失败后`会自动进入同步队列等待`；
+>
+> 而条件队列是通过 Condition 实现的，`线程在持有锁的情况下调用 await 会释放锁并进入条件队列等待`，signal 或 signalAll 会将条件队列中的线程转移回同步队列重新竞争锁。
+
+
+
+
+
+
+
+#### 7，CAS  比较替换   aba问题  
+
+1️⃣ CAS（Compare And Swap）
+
+- CAS 是一种 **无锁的原子操作**
+- 核心逻辑：
+   **只有当内存值 == 期望值时，才更新为新值**
+- 原子性由 **CPU 指令** 保证，不依赖 synchronized
+- 常见应用：
+   `AtomicInteger`、`AtomicLong`、AQS 内部状态控制
+
+👉 **CAS 解决的是“并发更新的原子性问题”**
+
+------
+
+2️⃣ ABA 问题
+
+- CAS 只比较“当前值”，**不关心中间是否被修改**
+- 典型问题：
+   值从 A → B → A，CAS 仍然认为“没变”
+- ABA 是 **语义问题，不是原子性问题**
+- 在计数场景通常无影响，在引用/指针结构中可能出错
+
+**解决方式：**
+
+- `给值加版本号`
+- 常用类：`AtomicStampedReference`
+
+------
+
+3️⃣ 自旋锁（Spin Lock）
+
+- 自旋锁是一种 **等待策略**
+- 核心行为：
+   **获取锁失败后，不阻塞线程，而是循环尝试**
+- 适合：
+  - 临界区短
+  - 低竞争场景
+- 缺点：
+  - 消耗 CPU
+
+------
+
+4️⃣ CAS 和自旋锁的关系（重点）
+
+- **CAS 是原子操作手段**
+- **自旋是失败后的重试方式**
+- 关系总结：
+
+> **自旋锁 = CAS + 循环重试**
+
+- CAS ≠ 自旋锁
+- 但自旋锁几乎一定基于 CAS 实现
+
+------
+
+5️⃣ 三者一句话定型
+
+- **CAS**：原子比较并交换
+- **ABA**：CAS 的语义缺陷
+- **自旋锁**：基于 CAS 的非阻塞等待策略
+
+------
+
+6️⃣ 面试一句话版（超稳）
+
+> CAS 是一种基于 CPU 原子指令的无锁同步机制，存在 ABA 问题，可通过版本号解决；自旋锁通常基于 CAS 实现，通过循环 CAS 的方式避免线程阻塞，但会消耗 CPU。
+
+
+
+
+
+
+
+另外 CAS一般也都会采用自旋的方式。当CAS失败的时候，会尝试短暂的自旋重复执行
+
+
+
+**当然 要衡量占用的CPU资源**
+
+
+
+
+
+#### 8， unsafe
+
+你可以这样理解：
+
+> **Unsafe 是 JVM 暴露给 Java 层的“后门接口”，
+>  用于做普通 Java 语法做不到的事情。**
+
+它能干的事包括：
+
+- 直接操作内存
+- 绕过构造器创建对象
+- 修改对象字段偏移量
+- 执行 CAS（compareAndSwap）
+
+👉 名字叫 Unsafe，不是吓唬你，是真的“容易把 JVM 玩炸”。
+
+
+
+
+
+
+
+你现在可以这样总结（非常稳）：
+
+> CAS 是由 CPU 提供的原子指令支持的，Java 需要**通过 Unsafe 或 VarHandle 与底层交互来实现 CAS**。业务代码不需要也不应该直接使用 Unsafe，而是通过 Atomic 类或并发工具间接使用 CAS。
+
+
+
 ## 3，集合类
 
 

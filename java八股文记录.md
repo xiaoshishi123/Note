@@ -901,7 +901,184 @@ ReentrantLock 支持公平和非公平两种模式，区别在于获取锁时是
 
 
 
+#### 11， 重要  三类并发工具  顺序打印线程
 
+##### 1️⃣ `synchronized` + `wait / notify`
+
+**定位**：最底层、JVM 内建、基于对象监视器
+ **核心思想**：共享状态 + 条件等待
+
+
+
+常用方法
+
+```Java
+synchronized(obj) { }   // 获取/释放锁
+obj.wait();             // 释放锁并等待
+obj.notify();           // 唤醒一个等待线程
+obj.notifyAll();        // 唤醒所有等待线程
+```
+
+###### 关键规则
+
+- `wait / notify` **必须在 synchronized 内**
+- 条件判断必须用 `while`
+- 锁只管互斥，**顺序靠状态变量**
+
+
+
+
+
+```java
+public class Print123_Sync {
+
+    static final Object lock = new Object();
+    static int state = 1;
+
+    public static void main(String[] args) {
+        new Thread(() -> print(1, "1", 2)).start();
+        new Thread(() -> print(2, "2", 3)).start();
+        new Thread(() -> print(3, "3", 1)).start();
+    }
+
+    static void print(int my, String s, int next) {
+        for (int i = 0; i < 5; i++) {
+            synchronized (lock) {
+                while (state != my) {
+                    try { lock.wait(); } catch (Exception ignored) {}
+                }
+                System.out.print(s);
+                state = next;
+                lock.notifyAll();
+            }
+        }
+    }
+}
+
+```
+
+
+
+------
+
+##### 2️⃣ `Semaphore`
+
+**定位**：并发工具类，控制“许可数量”
+ **核心思想**：发令牌 / 传执行权
+
+
+
+常用方法
+
+```Java
+new Semaphore(int permits);  // 初始化许可数
+sem.acquire();               // 获取许可（阻塞）
+sem.release();               // 释放许可
+```
+
+关键规则
+
+- 初始 `permits` 决定谁能先执行
+- `acquire` = 等票
+- `release` = 发票
+- 不需要共享状态变量
+
+```java
+import java.util.concurrent.Semaphore;
+
+public class Print123_Semaphore {
+
+    static Semaphore s1 = new Semaphore(1);
+    static Semaphore s2 = new Semaphore(0);
+    static Semaphore s3 = new Semaphore(0);
+
+    public static void main(String[] args) {
+        new Thread(() -> print(s1, s2, "1")).start();
+        new Thread(() -> print(s2, s3, "2")).start();
+        new Thread(() -> print(s3, s1, "3")).start();
+    }
+
+    static void print(Semaphore cur, Semaphore next, String s) {
+        for (int i = 0; i < 5; i++) {
+            try {
+                cur.acquire();
+                System.out.print(s);
+                next.release();
+            } catch (Exception ignored) {}
+        }
+    }
+}
+
+```
+
+
+
+------
+
+##### 3️⃣ `ReentrantLock` + `Condition`
+
+**定位**：显式锁，AQS 实现，`synchronized` 的增强版
+ **核心思想**：多条件队列 + 显式控制
+
+
+
+常用方法
+
+```java
+lock.lock();                 // 加锁
+lock.unlock();               // 解锁
+
+Condition c = lock.newCondition();
+c.await();                   // 等待
+c.signal();                  // 唤醒一个
+c.signalAll();               // 唤醒所有
+```
+
+关键规则
+
+- `await / signal` 必须在 `lock.lock()` 内
+- 一个锁可以有 **多个 Condition**
+- 功能最强，但代码最啰嗦
+
+
+
+```java
+import java.util.concurrent.locks.*;
+
+public class Print123_Lock {
+
+    static ReentrantLock lock = new ReentrantLock();
+    static Condition c1 = lock.newCondition();
+    static Condition c2 = lock.newCondition();
+    static Condition c3 = lock.newCondition();
+    static int state = 1;
+
+    public static void main(String[] args) {
+        new Thread(() -> print(1, "1", 2, c1, c2)).start();
+        new Thread(() -> print(2, "2", 3, c2, c3)).start();
+        new Thread(() -> print(3, "3", 1, c3, c1)).start();
+    }
+
+    static void print(int my, String s, int next,
+                      Condition cur, Condition nxt) {
+        for (int i = 0; i < 5; i++) {
+            lock.lock();
+            try {
+                while (state != my) {
+                    cur.await();
+                }
+                System.out.print(s);
+                state = next;
+                nxt.signal();
+            } catch (Exception ignored) {
+            } finally {
+                lock.unlock();
+            }
+        }
+    }
+}
+
+```
 
 
 

@@ -5608,3 +5608,549 @@ const AdminLogin = () => {
 
 ```
 
+
+
+
+
+
+
+
+
+
+
+mylrarn.vue
+
+```vue
+<template>
+    <div class="my-learn-page">
+
+        <!-- ===== 顶部（与首页完全一致） ===== -->
+        <header class="user-header">
+            <div class="header-content">
+
+                <!-- 左侧 LOGO -->
+                <div class="left-section">
+                    <img :src="require('@/assets/logoword.png')" alt="logo" class="logo-img" />
+                </div>
+
+                <!-- 中间标题隐藏（结构保持一致） -->
+                <!--
+        <div class="middle-section">
+          <h1>中冶南方BIM讲堂</h1>
+        </div>
+        -->
+
+                <!-- 右侧按钮区 -->
+                <div class="right-section">
+                    <span class="welcome-text">欢迎您，{{ username }}</span>
+
+                    <el-button class="home-button button" @click="goHome">首页</el-button>
+                    <el-button class="home-button button" @click="goMyLearn">个人记录</el-button>
+                    <el-button class="logout-button button" @click="handleLogout">退出登录</el-button>
+                </div>
+
+            </div>
+        </header>
+
+        <!-- ===== 标题栏 ===== -->
+        <div class="page-titlebar">
+            <h2 class="page-title">个人学习记录</h2>
+            <span class="page-subtitle">查看您的学习进度与最近观看位置</span>
+        </div>
+
+        <!-- ===== 内容区（分类可折叠） ===== -->
+        <div class="page-content">
+            <div class="learn-container">
+
+                <!-- 每个分类 -->
+                <div v-for="cat in dataList" :key="cat.categoryId" class="category-block">
+
+                    <div class="category-title collapsible" @click="toggle(cat)">
+                        <div class="marker"></div>
+                        <h3 class="category-title-text">{{ cat.categoryName }}</h3>
+                        <span class="arrow" :class="{ open: cat.open }">▶</span>
+                    </div>
+
+                    <!-- 不要 transition 包整个列表 -->
+                    <div v-show="cat.open" class="video-list">
+
+                        <!-- ✅ transition 只包“单个 item” -->
+                        <transition-group name="fade" tag="div">
+                            <div v-for="v in cat.videos" :key="v.videoUid" class="video-item">
+                                <div class="video-info">
+                                    <div class="video-name">{{ cleanName(v.videoName) }}</div>
+                                    <div class="video-meta">
+                                        <span>历史观看位置：{{ formatTime(v.lastWatchTime) }}</span>
+                                        <span class="status" :class="v.completedFlag === 1 ? 'done' : 'todo'">
+                                            {{ v.completedFlag === 1 ? "已完成" : "未完成" }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- 这个按钮现在 100% 会出现 -->
+                                <el-button type="primary" size="small" class="jump-btn"
+                                    @click="goToVideo(v.videoUid, cat.categoryId, v.lastWatchTime)">
+                                    继续学习 ▶
+                                </el-button>
+                            </div>
+                        </transition-group>
+
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+
+        <!-- ===== 底部 ===== -->
+        <footer class="page-footer">
+            <img src="/wisdrilogo.png" alt="logo" class="footer-logo" />
+
+            <span class="footer-text">中冶南方钢铁公司工程数字化(BIM)中心</span>
+        </footer>
+
+    </div>
+</template>
+
+
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import Request from '@/utils/request'
+const router = useRouter()
+
+const testFunction = () => {
+    console.log('测试按钮点击')
+    console.log('当前视频数据:', v)
+    console.log('当前分类数据:', cat)
+}
+
+
+/* ------------- 顶部用户名 ------------- */
+const username = ref("未登录")
+
+/* ------------- 你的后端返回的列表 ------------- */
+const dataList = ref([])
+
+/* ------------- 折叠切换 ------------- */
+const toggle = (cat) => {
+    cat.open = !cat.open
+    open: true
+}
+
+/* ------------- 跳转视频 ------------- */
+
+// MyLearn.vue 里
+const goToVideo = (videoUid, categoryId, lastWatchTime) => {
+    const pos = Number(lastWatchTime) || 0
+
+    router.push({
+        path: `/category/${categoryId}`,
+        query: {
+            vid: videoUid,
+            pos
+        }
+    })
+}
+
+
+
+
+function formatTime(sec) {
+    const s = Number(sec) || 0
+    const m = Math.floor(s / 60)
+    const ms = String(s % 60).padStart(2, "0")
+    return `${m}:${ms}`
+}
+function cleanName(name) {
+    if (!name) return ''
+    return String(name)
+        // 干掉行首各种空白：空格、制表符、换行、全角空格、BOM、零宽空格
+        .replace(/^[\s\u3000\uFEFF\u200B\u200C\u200D]+/, '')
+}
+
+
+
+/* =========================== */
+/*  核心：加载后端学习记录   */
+/* =========================== */
+async function loadMyLearn() {
+    console.log("🚀 loadMyLearn start")
+
+    const empCode = sessionStorage.getItem("username")
+    console.log("📦 empCode:", empCode)
+
+    if (!empCode) {
+        console.warn("❌ empCode empty")
+        dataList.value = []
+        return
+    }
+
+    const res = await Request.get('/learn/progressUser/all', {
+        params: { empCode }
+    })
+
+    console.log("📥 raw response:", res.data)
+
+    const raw = Array.isArray(res.data) ? res.data : []
+
+    dataList.value = raw.map(cat => {
+        const videos = Array.isArray(cat.videos)
+            ? cat.videos.filter(v => v && v.videoUid)
+            : []
+
+        console.log(`📂 category ${cat.categoryName}, videos:`, videos.length)
+
+        return {
+            categoryId: cat.categoryId,
+            categoryName: cat.categoryName,
+            videos,
+            open: false
+        }
+    })
+}
+
+
+
+/* ------------- 顶部按钮 ------------- */
+const goHome = () => router.push("/")
+const goMyLearn = () => router.push("/user/my-learn")
+const handleLogout = () => {
+    localStorage.removeItem("token")
+    sessionStorage.removeItem("username")
+    router.push("/login")
+}
+
+/* ------------- 页面加载时执行 ------------- */
+onMounted(async () => {
+    const u = sessionStorage.getItem("username")
+    if (u) username.value = u
+
+    await loadMyLearn()
+})
+</script>
+
+
+
+<!-- 这段 :root + scoped 样式，就是你 HomeView 里的，直接搬过来 -->
+<style>
+:root {
+    --hdr-bg: #f5f7fa;
+    --hdr-border: #e5e7eb;
+    --text-weak: #666c72;
+    --text-black: #000000ce;
+    --link-green: #3eaf6d;
+    --link-hover: #1f9d55;
+    --link-active: #18794a;
+}
+</style>
+
+<style scoped>
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ===== 头部，与你现在首页的一模一样 ===== */
+.user-header {
+    display: flex;
+    align-items: center;
+    padding: 2vh 2vw;
+    background-color: var(--hdr-bg);
+    color: #000000;
+    box-shadow: none;
+    border-bottom: 1px solid var(--hdr-border);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.left-section {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    margin-right: 1rem;
+}
+
+.logo-img {
+    height: 42px;
+    width: auto;
+    object-fit: contain;
+}
+
+.middle-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    flex: 1 1 auto;
+    padding-left: 1vw;
+    padding-right: 1vw;
+}
+
+.middle-section h1 {
+    margin: 0;
+    line-height: 1.15;
+    text-align: left;
+    font-size: clamp(18px, 1.4vw, 28px);
+    font-weight: bold;
+    text-shadow: none;
+    font-family: inherit;
+    color: #000307;
+}
+
+.subtitle {
+    position: static;
+    margin: 3px 0 0;
+    line-height: 1;
+    text-align: left;
+    font-size: clamp(10px, 0.8vw, 14px);
+    font-weight: normal;
+    letter-spacing: 0.12em;
+    word-spacing: 0;
+    white-space: nowrap;
+    transform: none;
+    font-family: inherit;
+    color: #000307;
+}
+
+.right-section {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1.6rem;
+}
+
+.welcome-text {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-weak);
+    margin-right: 2rem;
+}
+
+.button {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--link-green);
+    cursor: pointer;
+    transition: color .2s ease;
+}
+
+.button:hover {
+    color: var(--link-hover);
+}
+
+.button:active {
+    color: var(--link-active);
+}
+
+/* ===== 页面标题条，同一套样式，只是文案不同 ===== */
+.page-content {
+    background-color: #FFFFFF;
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-bottom: 72px;
+}
+
+.page-titlebar {
+    display: flex;
+    align-items: baseline;
+    gap: .9rem;
+    padding: 0 15vw;
+    margin: 24px 0 24px;
+    background: #fff;
+}
+
+.page-title {
+    margin: 0;
+    line-height: 1;
+    font-size: clamp(16px, 1.25vw, 22px);
+    font-weight: 750;
+    letter-spacing: .01em;
+    color: var(--text-black);
+}
+
+.page-subtitle {
+    margin: 0;
+    line-height: 1;
+    font-size: clamp(12px, .9vw, 13px);
+    font-weight: 450;
+    color: var(--text-black);
+    opacity: .75;
+    letter-spacing: .02em;
+    white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+    .page-titlebar {
+        flex-wrap: wrap;
+        gap: .25rem;
+    }
+
+    .page-subtitle {
+        white-space: normal;
+    }
+}
+
+/* ===== 底部，和首页一样 ===== */
+.page-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 56px;
+    background: #fff;
+    border-top: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.8rem;
+    z-index: 1000;
+}
+
+.footer-logo {
+    width: 120px;
+    height: auto;
+    object-fit: contain;
+    margin-right: clamp(16px, 4vw, 48px);
+}
+
+.footer-text {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--text-weak);
+    letter-spacing: 0.18em;
+    line-height: 1;
+    font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    margin-left: clamp(16px, 4vw, 48px);
+}
+
+/* ===== 学习记录卡片自己的样式（不影响你原来的首页） ===== */
+.learn-container {
+    padding: 0 15vw;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.category-block {
+    margin-bottom: 12px;
+}
+
+.category-title {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.marker {
+    width: 6px;
+    height: 20px;
+    background: #33aa55;
+    border-radius: 3px;
+    margin-right: 10px;
+}
+
+.category-title-text {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+}
+
+.video-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.video-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 10px 16px;
+    transition: box-shadow .2s ease, transform .15s ease;
+    background: #fff;
+}
+
+.video-item:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+    transform: translateY(-2px);
+}
+
+.video-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.video-name {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    text-align: left;
+}
+
+
+.video-meta {
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 13px;
+    color: #666;
+}
+
+.status {
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.status.done {
+    background: #e8fbe8;
+    color: #2fa551;
+}
+
+.status.todo {
+    background: #ffecec;
+    color: #d9534f;
+}
+
+.jump-btn {
+    padding: 0 10px;
+}
+
+.jump-link {
+    color: #fff;
+    text-decoration: none;
+}
+</style>
+
+```
+
